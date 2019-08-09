@@ -2,11 +2,13 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"github.com/360EntSecGroup-Skylar/excelize"
 	"github.com/liserjrqlxue/simple-util"
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 )
 
 var (
@@ -39,15 +41,34 @@ var (
 
 type Sample struct {
 	sampleID    string
+	libID       string
 	subLibID    string
 	positiveMut string
-	fq1, fq2    string
+	fq1, fq2    []string
 }
+
+// regexp
+var (
+	fq1 = regexp.MustCompile(`_1.f(ast)?q(.gz)?$`)
+	fq2 = regexp.MustCompile(`_2.f(ast)?q(.gz)?$`)
+)
 
 func (sample *Sample) findPE(rawPath string) {
 	dirs, err := filepath.Glob(filepath.Join(rawPath, "*"+sample.subLibID))
 	simple_util.CheckErr(err)
-	log.Printf("%+v", dirs)
+	for _, dir := range dirs {
+		fqs, err := filepath.Glob(filepath.Join(dir, "*.fq.gz"))
+		simple_util.CheckErr(err)
+		for _, fq := range fqs {
+			if fq1.MatchString(fq) {
+				sample.fq1 = append(sample.fq1, fq)
+			} else if fq2.MatchString(fq) {
+				sample.fq2 = append(sample.fq2, fq)
+			} else {
+				log.Fatalf("can not parse fq[%s]", fq)
+			}
+		}
+	}
 }
 
 func main() {
@@ -80,9 +101,12 @@ func main() {
 		sampleID := item["样本编号"]
 		db[sampleID] = &Sample{
 			sampleID:    sampleID,
+			libID:       *libID,
 			subLibID:    item["子文库号"],
 			positiveMut: item["突变位点"],
 		}
-		db[sampleID].findPE(filepath.Join(*dataPath, *proj))
+		db[sampleID].findPE(filepath.Join(*dataPath, *proj, *libID))
+		log.Printf("%+v", db[sampleID])
+		fmt.Printf("%s\t%s\t%s\t%s\t%s\n", sampleID, *libID, db[sampleID].subLibID, db[sampleID].fq1, db[sampleID].fq2)
 	}
 }
