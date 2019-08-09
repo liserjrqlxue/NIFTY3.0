@@ -60,22 +60,31 @@ var (
 	fq2 = regexp.MustCompile(`_2.f(ast)?q(.gz)?$`)
 )
 
-func (sample *Sample) findPE(rawPath string) {
+func (sample *Sample) findPE(rawPath string) (success bool) {
 	dirs, err := filepath.Glob(filepath.Join(rawPath, "*"+sample.subLibID))
 	simple_util.CheckErr(err)
+	var fq1Count, fq2Count uint
 	for _, dir := range dirs {
 		fqs, err := filepath.Glob(filepath.Join(dir, "*.fq.gz"))
 		simple_util.CheckErr(err)
 		for _, fq := range fqs {
 			if fq1.MatchString(fq) {
 				sample.fq1 = append(sample.fq1, fq)
+				fq1Count++
 			} else if fq2.MatchString(fq) {
 				sample.fq2 = append(sample.fq2, fq)
+				fq2Count++
 			} else {
 				log.Fatalf("can not parse fq[%s]", fq)
 			}
 		}
 	}
+	if fq1Count == 1 && fq2Count == 1 {
+		success = true
+	} else {
+		log.Printf("findPE of %s with error:[%s %s]", sample.sampleID, sample.fq1, sample.fq2)
+	}
+	return
 }
 
 func (sample *Sample) fprint(w io.Writer) (err error) {
@@ -132,7 +141,8 @@ func main() {
 			subLibID:    item["子文库号"],
 			positiveMut: item["突变位点"],
 		}
-		db[sampleID].findPE(filepath.Join(*dataPath, *proj, *libID))
-		simple_util.CheckErr(db[sampleID].fprint(info))
+		if db[sampleID].findPE(filepath.Join(*dataPath, *proj, *libID)) {
+			simple_util.CheckErr(db[sampleID].fprint(info))
+		}
 	}
 }
