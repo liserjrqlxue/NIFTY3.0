@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"github.com/360EntSecGroup-Skylar/excelize"
 	"github.com/liserjrqlxue/simple-util"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 )
 
 var (
@@ -16,6 +18,11 @@ var (
 		"input",
 		"",
 		"input excel",
+	)
+	outDir = flag.String(
+		"outDir",
+		".",
+		"output dir",
 	)
 	sheetName = flag.String(
 		"sheet",
@@ -71,6 +78,11 @@ func (sample *Sample) findPE(rawPath string) {
 	}
 }
 
+func (sample *Sample) fprint(w io.Writer) (err error) {
+	fmt.Fprintln(w, strings.Join([]string{sample.sampleID, sample.libID, sample.subLibID, sample.fq1[0], sample.fq2[0], sample.positiveMut}, "\t"))
+	return
+}
+
 func main() {
 	flag.Parse()
 	if *input == "" || *libID == "" {
@@ -78,6 +90,17 @@ func main() {
 		log.Print("-input and -libID is required")
 		os.Exit(1)
 	}
+
+	var inputList = filepath.Join(*outDir, "input.list")
+	iL, err := os.Create(inputList)
+	simple_util.CheckErr(err)
+	defer simple_util.DeferClose(iL)
+
+	info, err := os.Create(filepath.Join(*outDir, "sample.info"))
+	simple_util.CheckErr(err)
+	defer simple_util.DeferClose(info)
+	_, err = fmt.Fprintln(info, strings.Join([]string{"SampleID", "LibID", "SubLibID", "Fq1", "Fq2", "PositiveMut"}, "\t"))
+	simple_util.CheckErr(err)
 
 	xlsxFh, err := excelize.OpenFile(*input)
 	simple_util.CheckErr(err)
@@ -89,6 +112,8 @@ func main() {
 		if row[0] == "序号" {
 			title = row
 			skip = false
+			_, err = fmt.Fprintln(iL, strings.Join([]string{"序号", "样本编号", "子文库号", "突变位点"}, "\t"))
+			simple_util.CheckErr(err)
 			continue
 		}
 		if skip {
@@ -98,6 +123,8 @@ func main() {
 		for i, key := range title {
 			item[key] = row[i]
 		}
+		_, err = fmt.Fprintln(iL, strings.Join([]string{item["序号"], item["样本编号"], item["子文库号"], item["突变位点"]}, "\t"))
+		simple_util.CheckErr(err)
 		sampleID := item["样本编号"]
 		db[sampleID] = &Sample{
 			sampleID:    sampleID,
@@ -106,7 +133,6 @@ func main() {
 			positiveMut: item["突变位点"],
 		}
 		db[sampleID].findPE(filepath.Join(*dataPath, *proj, *libID))
-		log.Printf("%+v", db[sampleID])
-		fmt.Printf("%s\t%s\t%s\t%s\t%s\n", sampleID, *libID, db[sampleID].subLibID, db[sampleID].fq1, db[sampleID].fq2)
+		simple_util.CheckErr(db[sampleID].fprint(info))
 	}
 }
