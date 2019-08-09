@@ -17,7 +17,7 @@ var (
 	input = flag.String(
 		"input",
 		"",
-		"input excel",
+		"input excel or fixed input.list",
 	)
 	outDir = flag.String(
 		"outDir",
@@ -92,6 +92,9 @@ func (sample *Sample) fprint(w io.Writer) (err error) {
 	return
 }
 
+var inputListFH *os.File
+var mapArray []map[string]string
+
 func main() {
 	flag.Parse()
 	if *input == "" || *libID == "" {
@@ -100,40 +103,53 @@ func main() {
 		os.Exit(1)
 	}
 
-	var inputList = filepath.Join(*outDir, "input.list")
-	iL, err := os.Create(inputList)
-	simple_util.CheckErr(err)
-	defer simple_util.DeferClose(iL)
-
 	info, err := os.Create(filepath.Join(*outDir, "sample.info"))
 	simple_util.CheckErr(err)
 	defer simple_util.DeferClose(info)
 	_, err = fmt.Fprintln(info, strings.Join([]string{"SampleID", "LibID", "SubLibID", "Fq1", "Fq2", "PositiveMut"}, "\t"))
 	simple_util.CheckErr(err)
 
-	xlsxFh, err := excelize.OpenFile(*input)
-	simple_util.CheckErr(err)
-	rows, err := xlsxFh.GetRows(*sheetName)
-	var skip = true
-	var title []string
-	var db = make(map[string]*Sample)
-	for _, row := range rows {
-		if row[0] == "序号" {
-			title = row
-			skip = false
-			_, err = fmt.Fprintln(iL, strings.Join([]string{"序号", "样本编号", "子文库号", "突变位点"}, "\t"))
-			simple_util.CheckErr(err)
-			continue
-		}
-		if skip {
-			continue
-		}
-		item := make(map[string]string)
-		for i, key := range title {
-			item[key] = row[i]
-		}
-		_, err = fmt.Fprintln(iL, strings.Join([]string{item["序号"], item["样本编号"], item["子文库号"], item["突变位点"]}, "\t"))
+	var inputList = filepath.Join(*outDir, "input.list")
+	var writeInputList = false
+	if inputList == *input {
+		log.Printf("use input.list (may be fixed)")
+		mapArray, _ = simple_util.File2MapArray(inputList, "\t", nil)
+	} else {
+		writeInputList = true
+		inputListFH, err := os.Create(inputList)
 		simple_util.CheckErr(err)
+		defer simple_util.DeferClose(inputListFH)
+		_, err = fmt.Fprintln(inputListFH, strings.Join([]string{"序号", "样本编号", "子文库号", "突变位点"}, "\t"))
+		simple_util.CheckErr(err)
+
+		xlsxFh, err := excelize.OpenFile(*input)
+		simple_util.CheckErr(err)
+		rows, err := xlsxFh.GetRows(*sheetName)
+		var skip = true
+		var title []string
+		for _, row := range rows {
+			if row[0] == "序号" {
+				title = row
+				skip = false
+				continue
+			}
+			if skip {
+				continue
+			}
+			item := make(map[string]string)
+			for i, key := range title {
+				item[key] = row[i]
+			}
+			mapArray = append(mapArray, item)
+		}
+	}
+
+	var db = make(map[string]*Sample)
+	for _, item := range mapArray {
+		if writeInputList {
+			_, err = fmt.Fprintln(inputListFH, strings.Join([]string{item["序号"], item["样本编号"], item["子文库号"], item["突变位点"]}, "\t"))
+			simple_util.CheckErr(err)
+		}
 		sampleID := item["样本编号"]
 		db[sampleID] = &Sample{
 			sampleID:    sampleID,
