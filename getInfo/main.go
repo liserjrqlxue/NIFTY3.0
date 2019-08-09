@@ -106,6 +106,8 @@ func main() {
 	*input, err = filepath.Abs(*input)
 	simple_util.CheckErr(err)
 
+	simple_util.CheckErr(os.MkdirAll(*outDir, 0755))
+
 	info, err := os.Create(filepath.Join(*outDir, "sample.info"))
 	simple_util.CheckErr(err)
 	defer simple_util.DeferClose(info)
