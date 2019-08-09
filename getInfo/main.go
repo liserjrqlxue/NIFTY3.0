@@ -123,7 +123,7 @@ func main() {
 		mapArray, _ = simple_util.File2MapArray(inputList, "\t", nil)
 	} else {
 		writeInputList = true
-		inputListFH, err := os.Create(inputList)
+		inputListFH, err = os.Create(inputList)
 		simple_util.CheckErr(err)
 		defer simple_util.DeferClose(inputListFH)
 		_, err = fmt.Fprintln(inputListFH, strings.Join([]string{"序号", "样本编号", "子文库号", "突变位点"}, "\t"))
