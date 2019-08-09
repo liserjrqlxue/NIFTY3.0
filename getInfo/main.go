@@ -94,6 +94,7 @@ func (sample *Sample) fprint(w io.Writer) (err error) {
 
 var inputListFH *os.File
 var mapArray []map[string]string
+var err error
 
 func main() {
 	flag.Parse()
@@ -102,6 +103,8 @@ func main() {
 		log.Print("-input and -libID is required")
 		os.Exit(1)
 	}
+	*input, err = filepath.Abs(*input)
+	simple_util.CheckErr(err)
 
 	info, err := os.Create(filepath.Join(*outDir, "sample.info"))
 	simple_util.CheckErr(err)
@@ -110,6 +113,10 @@ func main() {
 	simple_util.CheckErr(err)
 
 	var inputList = filepath.Join(*outDir, "input.list")
+	if simple_util.FileExists(inputList) {
+		inputList, err = filepath.Abs(inputList)
+		simple_util.CheckErr(err)
+	}
 	var writeInputList = false
 	if inputList == *input {
 		log.Printf("use input.list (may be fixed)")
