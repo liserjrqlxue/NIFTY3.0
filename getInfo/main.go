@@ -78,17 +78,20 @@ func (sample *Sample) findPE(rawPath string) (success bool) {
 				log.Fatalf("can not parse fq[%s]", fq)
 			}
 		}
+		if fq1Count != fq2Count {
+			log.Printf("findPE of %s with error:[%v %v]", sample.sampleID, sample.fq1, sample.fq2)
+		}
 	}
-	if fq1Count == 1 && fq2Count == 1 {
+	if fq1Count > 0 {
 		success = true
 	} else {
-		log.Printf("findPE of %s with error:[%s %s]", sample.sampleID, sample.fq1, sample.fq2)
+		log.Printf("findPE of %s with error:[%v %v]", sample.sampleID, sample.fq1, sample.fq2)
 	}
 	return
 }
 
 func (sample *Sample) fprint(w io.Writer) (err error) {
-	fmt.Fprintln(w, strings.Join([]string{sample.sampleID, sample.libID, sample.subLibID, sample.fq1[0], sample.fq2[0], sample.positiveMut}, "\t"))
+	fmt.Fprintln(w, strings.Join([]string{sample.sampleID, sample.libID, sample.subLibID, strings.Join(sample.fq1, ","), strings.Join(sample.fq2, ","), sample.positiveMut}, "\t"))
 	return
 }
 
