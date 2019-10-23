@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/360EntSecGroup-Skylar/excelize"
 	"github.com/liserjrqlxue/simple-util"
 	"io"
 	"log"
@@ -14,10 +13,15 @@ import (
 )
 
 var (
+	xlsx = flag.String(
+		"xlsx",
+		"",
+		"input excel",
+	)
 	input = flag.String(
 		"input",
 		"",
-		"input excel or fixed input.list",
+		"input.list",
 	)
 	outDir = flag.String(
 		"outDir",
@@ -32,7 +36,7 @@ var (
 	libID = flag.String(
 		"lib",
 		"",
-		"文库号",
+		"文库号,raw data in -dataPath/-proj/-libID",
 	)
 	dataPath = flag.String(
 		"dataPath",
@@ -91,7 +95,8 @@ func (sample *Sample) findPE(rawPath string) (success bool) {
 }
 
 func (sample *Sample) fprint(w io.Writer) (err error) {
-	fmt.Fprintln(w, strings.Join([]string{sample.sampleID, sample.libID, sample.subLibID, strings.Join(sample.fq1, ","), strings.Join(sample.fq2, ","), sample.positiveMut}, "\t"))
+	_, err = fmt.Fprintln(w, strings.Join([]string{sample.sampleID, sample.libID, sample.subLibID, strings.Join(sample.fq1, ","), strings.Join(sample.fq2, ","), sample.positiveMut}, "\t"))
+	simple_util.CheckErr(err)
 	return
 }
 
@@ -101,13 +106,16 @@ var err error
 
 func main() {
 	flag.Parse()
-	if *input == "" || *libID == "" {
+	if *input == "" && *xlsx == "" {
 		flag.Usage()
-		log.Print("-input and -libID is required")
+		log.Print("-input or -xlsx is required")
 		os.Exit(1)
 	}
-	*input, err = filepath.Abs(*input)
-	simple_util.CheckErr(err)
+	if *libID == "" {
+		flag.Usage()
+		log.Print("-libID is required")
+		os.Exit(1)
+	}
 
 	simple_util.CheckErr(os.MkdirAll(*outDir, 0755))
 
@@ -122,38 +130,26 @@ func main() {
 		inputList, err = filepath.Abs(inputList)
 		simple_util.CheckErr(err)
 	}
-	var writeInputList = false
-	if inputList == *input {
-		log.Printf("use input.list (may be fixed)")
-		mapArray, _ = simple_util.File2MapArray(inputList, "\t", nil)
+	var writeInputList = true
+
+	if *input != "" {
+		*input, err = filepath.Abs(*input)
+		simple_util.CheckErr(err)
+		mapArray, _ = simple_util.File2MapArray(*input, "\t", nil)
+		if inputList == *input {
+			log.Printf("reuse %s/input.list (may be fixed)", *outDir)
+			writeInputList = false
+		}
 	} else {
-		writeInputList = true
+		mapArray = parseXlsx(*input)
+	}
+
+	if writeInputList {
 		inputListFH, err = os.Create(inputList)
 		simple_util.CheckErr(err)
 		defer simple_util.DeferClose(inputListFH)
 		_, err = fmt.Fprintln(inputListFH, strings.Join([]string{"序号", "样本编号", "子文库号", "突变位点"}, "\t"))
 		simple_util.CheckErr(err)
-
-		xlsxFh, err := excelize.OpenFile(*input)
-		simple_util.CheckErr(err)
-		rows, err := xlsxFh.GetRows(*sheetName)
-		var skip = true
-		var title []string
-		for _, row := range rows {
-			if row[0] == "序号" {
-				title = row
-				skip = false
-				continue
-			}
-			if skip {
-				continue
-			}
-			item := make(map[string]string)
-			for i, key := range title {
-				item[key] = row[i]
-			}
-			mapArray = append(mapArray, item)
-		}
 	}
 
 	var db = make(map[string]*Sample)
